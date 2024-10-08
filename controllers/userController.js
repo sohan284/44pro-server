@@ -1,51 +1,15 @@
 const { ObjectId } = require("mongodb");
+const jwt = require("jsonwebtoken");
 const { getDB } = require("../config/db");
 
 const getUserList = async (req, res) => {
   try {
-    const { role } = req?.query;
-    const usersCollection = getDB("taskify").collection("users");
-    const projectsCollection = getDB("taskify").collection("projects");
+    const usersCollection = getDB("44pro").collection("users");
 
-    // Filter for users based on role
-    const userFilter = {};
-    if (role) {
-      userFilter["role"] = role; // If role is provided, filter by role
-    } else {
-      userFilter["role"] = { $ne: "client" }; // If no role is provided, exclude "client" role
-    }
-
-    const users = await usersCollection.find(userFilter).toArray();
-
-    // Use Promise.all to handle the asynchronous mapping
-    const usersWithProjectCount = await Promise.all(
-      users.map(async (user) => {
-        // Filter for projects where the user is in the 'users' array
-        const userProjectFilter = { "users._id": `${user._id}` };
-        const userProjectResult = await projectsCollection
-          .find(userProjectFilter)
-          .toArray();
-
-        // Filter for projects where the user is in the 'clients' array
-        const clientProjectFilter = { "clients._id": `${user._id}` };
-        const clientProjectResult = await projectsCollection
-          .find(clientProjectFilter)
-          .toArray();
-
-        // Combine both counts into a single projectCount
-        const projectCount =
-          userProjectResult.length + clientProjectResult.length;
-        // Add projectCount to user
-        return {
-          ...user,
-          projectCount,
-        };
-      })
-    );
-
+    const users = await usersCollection.find().toArray();
     res.status(200).json({
       success: true,
-      data: usersWithProjectCount,
+      data: users,
       message: "Users retrieved successfully",
     });
   } catch (error) {
@@ -60,7 +24,7 @@ const getUserList = async (req, res) => {
 const getSingleUser = async (req, res) => {
   try {
     const userId = req.params.id; // Assuming the ID is passed as a URL parameter
-    const usersCollection = getDB("taskify").collection("users");
+    const usersCollection = getDB("44pro").collection("users");
 
     const result = await usersCollection.findOne({ _id: new ObjectId(userId) });
 
@@ -88,52 +52,18 @@ const getSingleUser = async (req, res) => {
 
 const upsertUser = async (req, res) => {
   try {
-    const usersCollection = getDB("taskify").collection("users");
+    const usersCollection = getDB("44pro").collection("users");
 
-    const {
-      displayName,
-      lastName,
-      email,
-      company,
-      countryCode,
-      phoneNumber,
-      password,
-      dateOfBirth,
-      dateOfJoining,
-      role,
-      address,
-      city,
-      state,
-      country,
-      zipCode,
-      status,
-      requireEmailVerification,
-      photoURL,
-    } = req.body;
+    const { name, email, password } = req.body;
 
     const filter = { email };
     const options = { upsert: true };
 
     const updateDoc = {
       $set: {
-        displayName,
-        lastName,
+        name,
         email,
-        company,
-        countryCode,
-        phoneNumber,
         password,
-        dateOfBirth,
-        dateOfJoining,
-        role,
-        address,
-        city,
-        state,
-        country,
-        zipCode,
-        status,
-        requireEmailVerification,
-        photoURL,
       },
     };
 
@@ -149,9 +79,7 @@ const upsertUser = async (req, res) => {
       {
         userId: userId, // Use the ID from the result
         email: email,
-        role: role,
-        name: displayName,
-        photoURL: photoURL,
+        name: name,
       },
       process.env.JWT_SECRET, // Secret key stored in env variables
       { expiresIn: "1h" } // Token expiry time
@@ -175,8 +103,7 @@ const upsertUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   const { email, password } = req.body;
-  const usersCollection = getDB("taskify").collection("users");
-
+  const usersCollection = getDB("44pro").collection("users");
   try {
     const user = await usersCollection.findOne({ email });
 
@@ -192,9 +119,7 @@ const loginUser = async (req, res) => {
       {
         userId: user._id,
         email: user.email,
-        role: user.role,
-        name: user.displayName,
-        photoURL: user.photoURL,
+        name: user.name,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
@@ -215,7 +140,7 @@ const deleteUser = async (req, res) => {
   const userId = req.params.id;
 
   try {
-    const usersCollection = getDB("taskify").collection("users");
+    const usersCollection = getDB("44pro").collection("users");
     const result = await usersCollection.deleteOne({
       _id: new ObjectId(userId),
     });

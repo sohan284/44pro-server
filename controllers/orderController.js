@@ -4,7 +4,9 @@ const { getDB } = require("../config/db");
 const getOrders = async (req, res) => {
   try {
     const ordersCollection = getDB("44pro").collection("orders");
-    const result = await ordersCollection.find().toArray();
+    const { email } = req.query;
+    const query = email ? { "formData.email": email } : {};
+    const result = await ordersCollection.find(query).toArray();
     res.status(200).json({
       success: true,
       data: result,

@@ -9,11 +9,75 @@ let otpStore = {}; // In-memory storage for OTPs (consider a better storage solu
 const transporter = nodemailer.createTransport({
   service: "gmail", // Or any email service you prefer
   auth: {
-    user: "srsohan284@gmail.com", // Your email
-    pass: "srsohan01788175088", // Your email password
+    user: "sr.sohan088@gmail.com", // Your email
+    pass: "imrd iusu ynkc yqca", // Your email password
   },
 });
 
+// Verify OTP
+const verifyOtp = async (req, res) => {
+  const { email, otp } = req.body;
+
+  // Check if OTP exists and is valid
+  if (!otpStore[email]) {
+    return res
+      .status(400)
+      .json({ success: false, message: "No OTP sent or expired" });
+  }
+
+  const storedOtpData = otpStore[email];
+  const otpCreatedAt = storedOtpData.createdAt;
+
+  // Check if OTP is expired (2 minutes)
+  if (Date.now() - otpCreatedAt > 2 * 60 * 1000) {
+    delete otpStore[email]; // Clean up expired OTP
+    return res.status(400).json({ success: false, message: "OTP expired" });
+  }
+
+  if (storedOtpData.otp !== otp) {
+    return res.status(400).json({ success: false, message: "Invalid OTP" });
+  }
+
+  // Clear OTP after verification
+  delete otpStore[email];
+
+  res.status(200).json({ success: true, message: "OTP verified successfully" });
+};
+
+const loginUser = async (req, res) => {
+  const { email, password } = req.body;
+  const usersCollection = getDB("44pro").collection("users");
+  try {
+    const user = await usersCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (user.password !== password) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      {
+        userId: user._id,
+        email: user.email,
+        name: user.name,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.status(200).json({ token, message: "Login successful" });
+  } catch (error) {
+    console.error("Error logging in user:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to log in user",
+      message: error.message,
+    });
+  }
+};
 const getUserList = async (req, res) => {
   try {
     const usersCollection = getDB("44pro").collection("users");
@@ -106,37 +170,32 @@ const upsertUser = async (req, res) => {
   }
 };
 
-const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-  const usersCollection = getDB("44pro").collection("users");
+// Send OTP
+const sendOtp = async (req, res) => {
+  const { email } = req.body;
+
+  // Generate a random 6-digit OTP
+  const otp = crypto.randomInt(100000, 999999).toString();
+
+  // Store OTP in memory (consider a database for production)
+  otpStore[email] = { otp, createdAt: Date.now() };
+
+  const mailOptions = {
+    from: "srsohan284@gmail.com",
+    to: email,
+    subject: "Your OTP Code",
+    text: `Your OTP code is ${otp}. It is valid for 10 minutes.`,
+  };
+
   try {
-    const user = await usersCollection.findOne({ email });
-
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    if (user.password !== password) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        email: user.email,
-        name: user.name,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    );
-
-    res.status(200).json({ token, message: "Login successful" });
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ success: true, message: "OTP sent successfully" });
   } catch (error) {
-    console.error("Error logging in user:", error);
+    console.error("Failed to send OTP:", error);
     res.status(500).json({
       success: false,
-      error: "Failed to log in user",
-      message: error.message,
+      message: "Failed to send OTP",
+      error: error.message,
     });
   }
 };
@@ -169,66 +228,6 @@ const deleteUser = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-// Send OTP
-const sendOtp = async (req, res) => {
-  const { email } = req.body;
-
-  // Generate a random 6-digit OTP
-  const otp = crypto.randomInt(100000, 999999).toString();
-
-  // Store OTP in memory (consider a database for production)
-  otpStore[email] = { otp, createdAt: Date.now() };
-
-  const mailOptions = {
-    from: "srsohan284@gmail.com",
-    to: email,
-    subject: "Your OTP Code",
-    text: `Your OTP code is ${otp}. It is valid for 10 minutes.`,
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-    res.status(200).json({ success: true, message: "OTP sent successfully" });
-  } catch (error) {
-    console.error("Failed to send OTP:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to send OTP",
-      error: error.message,
-    });
-  }
-};
-
-// Verify OTP
-const verifyOtp = async (req, res) => {
-  const { email, otp } = req.body;
-
-  // Check if OTP exists and is valid
-  if (!otpStore[email]) {
-    return res
-      .status(400)
-      .json({ success: false, message: "No OTP sent or expired" });
-  }
-
-  const storedOtpData = otpStore[email];
-  const otpCreatedAt = storedOtpData.createdAt;
-
-  // Check if OTP is expired (10 minutes)
-  if (Date.now() - otpCreatedAt > 10 * 60 * 1000) {
-    delete otpStore[email]; // Clean up expired OTP
-    return res.status(400).json({ success: false, message: "OTP expired" });
-  }
-
-  if (storedOtpData.otp !== otp) {
-    return res.status(400).json({ success: false, message: "Invalid OTP" });
-  }
-
-  // Clear OTP after verification
-  delete otpStore[email];
-
-  res.status(200).json({ success: true, message: "OTP verified successfully" });
 };
 
 module.exports = {
